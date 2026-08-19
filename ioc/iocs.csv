@@ -1,0 +1,9 @@
+type,value,port,protocol,role,verdict,vt_detections,attribution,first_seen,notes
+domain,trallfasterinf.com,80,tcp,delivery/phishing,malicious,10/92,DigitalOcean-hosted,2026-03-26,"Detected by Webroot, Seclookup, G-Data, CyRadar, alphaMountain.ai, Sophos, Lionic, Fortinet, BitDefender, ADMINUSLabs"
+domain,win-cosmic-mind.monasticservice.org,445,tcp,smb-anomaly,suspicious,0/92,unknown,2026-03-26,"Outbound SMB to external domain - possible lateral movement or backdoor"
+domain,ctldl.windowsupdate.com,80,tcp,legitimate/possible-masquerade,informational,0/92,Microsoft,2026-03-26,"Legitimate CTL endpoint; review request frequency"
+ipv4,137.184.114.20,80,tcp,phishing-host,malicious,,DigitalOcean,2026-03-26,"Hosts trallfasterinf.com"
+ipv4,209.197.3.8,80,tcp,cdn/legitimate,informational,,Microsoft,2026-03-26,"Resolves ctldl.windowsupdate.com"
+ipv4,10.9.23.23,445,tcp,compromised-internal-host,suspicious,,RFC1918,2026-03-26,"Source of outbound SMB traffic; MAC address not determined"
+port,80,80,tcp,c2-channel,informational,,,2026-03-26,"HTTP traffic to phishing domain"
+port,445,445,tcp,lateral-movement,malicious,,,2026-03-26,"Outbound SMB to the internet - critical indicator"

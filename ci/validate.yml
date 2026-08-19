@@ -1,0 +1,51 @@
+name: Validate IoC & rules
+
+on:
+  push:
+    paths: ["ioc/**", "rules/**", ".github/workflows/validate.yml"]
+  pull_request:
+    paths: ["ioc/**", "rules/**"]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON indicators
+        run: python -c "import json;json.load(open('ioc/iocs.json'));print('iocs.json OK')"
+
+      - name: Validate CSV indicators
+        run: |
+          python - <<'PY'
+          import csv
+          with open('ioc/iocs.csv', newline='', encoding='utf-8') as f:
+              rows = list(csv.DictReader(f))
+          required = {'type', 'value', 'verdict'}
+          assert rows, 'iocs.csv is empty'
+          missing = required - set(rows[0])
+          assert not missing, f'missing columns: {missing}'
+          for r in rows:
+              assert r['value'], f'empty value in row: {r}'
+          print(f'iocs.csv OK — {len(rows)} indicators')
+          PY
+
+      - name: Validate Sigma rules (YAML syntax)
+        run: |
+          pip install --quiet pyyaml
+          python - <<'PY'
+          import pathlib, yaml
+          count = 0
+          for path in pathlib.Path('rules/sigma').glob('*.yml'):
+              for doc in yaml.safe_load_all(path.read_text(encoding='utf-8')):
+                  if doc is None:
+                      continue
+                  for key in ('title', 'id', 'logsource', 'detection', 'level'):
+                      assert key in doc, f'{path}: missing "{key}"'
+                  count += 1
+          print(f'sigma OK — {count} rules')
+          PY
+
+      - name: Check blocklist is not empty
+        run: grep -qv '^#' ioc/blocklist.txt && echo "blocklist OK"

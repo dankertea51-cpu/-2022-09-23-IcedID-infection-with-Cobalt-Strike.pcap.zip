@@ -1,0 +1,30 @@
+name: 🔍 Уточнение индикатора
+description: Сообщить о неточном, устаревшем или ошибочном индикаторе компрометации
+title: "[IoC] "
+labels: ["ioc"]
+body:
+  - type: input
+    id: indicator
+    attributes:
+      label: Индикатор
+      placeholder: "например: 137.184.114.20"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Что не так
+      options:
+        - Индикатор устарел / больше не вредоносен
+        - Легитимный ресурс попал в блок-лист
+        - Неверная атрибуция или роль
+        - Нужно дополнить контекстом
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Обоснование
+      description: Источники, даты наблюдения, ссылки на VirusTotal/WHOIS/passive DNS
+    validations:
+      required: true

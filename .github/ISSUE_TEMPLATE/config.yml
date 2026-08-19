@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📄 Полный отчёт по анализу
+    url: https://github.com/dankertea51-cpu/-2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip/blob/main/docs/report.md
+    about: Перед созданием issue загляните в отчёт и методологию
+  - name: 🛡 Политика безопасности
+    url: https://github.com/dankertea51-cpu/-2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip/blob/main/SECURITY.md
+    about: Как безопасно работать с индикаторами из репозитория

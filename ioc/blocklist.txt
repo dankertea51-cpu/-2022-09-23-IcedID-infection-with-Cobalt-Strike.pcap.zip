@@ -1,0 +1,18 @@
+# Blocklist — 2022-09-23-IcedID-infection-with-Cobalt-Strike
+# Analyst: DeqUser | Extracted: 2026-03-26 | TLP:CLEAR
+# Flat list for firewalls, DNS sinkholes and proxy denylists.
+#
+# --- BLOCK: confirmed malicious -------------------------------------------
+trallfasterinf.com
+137.184.114.20
+#
+# --- BLOCK: suspicious (SMB anomaly) --------------------------------------
+win-cosmic-mind.monasticservice.org
+#
+# --- MONITOR ONLY: legitimate, do NOT block -------------------------------
+# ctldl.windowsupdate.com   # Microsoft CTL endpoint, review request frequency
+# 209.197.3.8               # Microsoft
+# 10.9.23.23                # internal host, isolate & scan instead of blocking
+#
+# --- POLICY ----------------------------------------------------------------
+# Deny outbound tcp/445 (SMB) from any internal host to the internet.

@@ -1,0 +1,36 @@
+# Артефакты анализа, которые не должны попадать в репозиторий
+*.pcap
+*.pcapng
+*.cap
+*.zip
+*.7z
+*.rar
+exported/
+extracted-objects/
+
+# Потенциально опасные образцы
+samples/
+*.exe
+*.dll
+*.bin
+*.dmp
+
+# Логи и временные файлы
+*.log
+*.tmp
+*.bak
+*~
+
+# ОС и редакторы
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+
+# Python (скрипты обработки IoC)
+__pycache__/
+*.py[cod]
+.venv/
+venv/

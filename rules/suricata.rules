@@ -1,0 +1,23 @@
+# Suricata / Snort signatures
+# Incident : 2022-09-23-IcedID-infection-with-Cobalt-Strike
+# Analyst  : DeqUser | Extracted: 2026-03-26 | TLP:CLEAR
+# SID range: 9000001-9000006 (local range, adjust to your deployment)
+#
+# Test before deployment:  suricata -T -c /etc/suricata/suricata.yaml
+
+# --- Phishing / delivery domain -------------------------------------------
+alert dns $HOME_NET any -> any any (msg:"IcedID CASE 2022-09-23 - DNS query for phishing domain trallfasterinf.com"; dns.query; content:"trallfasterinf.com"; nocase; isdataat:!1,relative; classtype:domain-c2; reference:url,malware-traffic-analysis.net; sid:9000001; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"IcedID CASE 2022-09-23 - HTTP request to phishing host trallfasterinf.com"; flow:established,to_server; http.host; content:"trallfasterinf.com"; nocase; classtype:trojan-activity; sid:9000002; rev:1;)
+
+alert tcp $HOME_NET any -> 137.184.114.20 80 (msg:"IcedID CASE 2022-09-23 - Connection to known phishing IP 137.184.114.20"; flow:to_server,established; classtype:trojan-activity; sid:9000003; rev:1;)
+
+# --- SMB anomaly: outbound 445 to external domain -------------------------
+alert dns $HOME_NET any -> any any (msg:"IcedID CASE 2022-09-23 - DNS query for SMB-anomaly domain win-cosmic-mind.monasticservice.org"; dns.query; content:"win-cosmic-mind.monasticservice.org"; nocase; classtype:bad-unknown; sid:9000004; rev:1;)
+
+alert tcp $HOME_NET any -> $EXTERNAL_NET 445 (msg:"POLICY - Outbound SMB (445/tcp) to external network - possible lateral movement or backdoor"; flow:to_server; threshold:type limit, track by_src, count 1, seconds 300; classtype:policy-violation; sid:9000005; rev:1;)
+
+alert tcp 10.9.23.23 any -> $EXTERNAL_NET 445 (msg:"IcedID CASE 2022-09-23 - Outbound SMB from suspected compromised host 10.9.23.23"; flow:to_server; classtype:trojan-activity; sid:9000006; rev:1;)
+
+# --- Optional: hunting rule, tune before enabling in production -----------
+#alert http $HOME_NET any -> 209.197.3.8 80 (msg:"HUNT - High-frequency requests to ctldl.windowsupdate.com (possible traffic blending)"; flow:established,to_server; http.host; content:"ctldl.windowsupdate.com"; threshold:type threshold, track by_src, count 50, seconds 60; classtype:not-suspicious; sid:9000007; rev:1;)

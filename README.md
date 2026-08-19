@@ -1,109 +1,180 @@
-# -2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip
-Full network traffic analysis of the BURNINCANDLE exercise (malware-traffic-analysis.net). Includes IoC extraction, C2 attribution to EnemyBot/Gafgyt botnet, DDoS traffic identification via NetBIOS, and detailed mitigation recommendations. A practical case study in Threat Intelligence and SOC analysis.
+<div align="center">
 
+<img src="assets/banner.png" alt="IcedID + Cobalt Strike — PCAP Traffic Analysis" width="100%">
 
-Домен: trallfasterinf.com (фишинг)
-IP: 137.184.114.20
-Домен: win-cosmic-mind.monasticservice.org (SMB-аномалия)
-Хост-источник: 10.9.23.23 (порт 445)
+# Анализ сетевого дампа: IcedID + Cobalt Strike
 
+**Разбор PCAP `2022-09-23-IcedID-infection-with-Cobalt-Strike` с площадки [malware-traffic-analysis.net](https://www.malware-traffic-analysis.net/)**
+Извлечение индикаторов компрометации, атрибуция C2, анализ аномалий SMB и готовые правила детекта.
 
-1. Введение
-Цель анализа — выявить признаки компрометации: C2-серверы, каналы утечки данных и нестандартные сетевые соединения.
+[![Type](https://img.shields.io/badge/type-Threat%20Intelligence-0b7285?style=flat-square)](docs/report.md)
+[![Malware](https://img.shields.io/badge/malware-IcedID%20%7C%20Cobalt%20Strike-c92a2a?style=flat-square)](docs/report.md)
+[![IoC](https://img.shields.io/badge/IoC-6%20артефактов-364fc7?style=flat-square)](ioc/)
+[![Rules](https://img.shields.io/badge/rules-Suricata%20%2B%20Sigma-2b8a3e?style=flat-square)](rules/)
+[![TLP](https://img.shields.io/badge/TLP-CLEAR-lightgrey?style=flat-square)](https://www.first.org/tlp/)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
+[Отчёт](docs/report.md) · [Индикаторы](ioc/) · [Правила детекта](rules/) · [Методология](docs/methodology.md) · [Веб-версия](docs/index.html)
 
-2. Методология
-Анализ проводился в несколько этапов. Сначала я выполнил общий обзор дампа через статистику Wireshark, чтобы понять масштаб записи. Затем перешёл к анализу DNS-запросов, так как злоумышленники часто используют DNS для поиска своих серверов. После этого я изучил HTTP и HTTPS-трафик, чтобы найти подозрительные обращения. Все найденные объекты я проверил в VirusTotal.
+</div>
 
+---
 
-3. Ход анализа
-3.1. Общая статистика
-Запись длилась неизвестное время, количество пакетов и потоков не позволяет сделать точные выводы о масштабе атаки.
+## 📌 Кратко (TL;DR)
 
+> Учебный разбор заражённого хоста. В трафике обнаружен подтверждённый фишинговый домен, обращения к нему по HTTP, а также **исходящий SMB-трафик (445/TCP) на внешний домен** — критический признак горизонтального перемещения или бэкдора.
 
-3.2. DNS-запросы
-При изучении DNS-запросов я обратил внимание на три домена.
+| | |
+|---|---|
+| **Дамп** | `2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap` |
+| **Дата извлечения IoC** | 2026-03-26 |
+| **Аналитик** | DeqUser |
+| **Инструменты** | Wireshark, VirusTotal |
+| **Ключевая находка** | Исходящий SMB (445/TCP) от `10.9.23.23` на внешний домен |
+| **Уровень риска** | 🔴 Высокий |
+| **Классификация** | TLP:CLEAR |
 
-Первый — trallfasterinf.com. Он выглядит как типичный фишинговый домен, и проверка в VirusTotal подтвердила это: 10 антивирусных движков, включая Sophos, Fortinet и BitDefender, классифицируют его как угрозу.
+---
 
-Второй — ctldl.windowsupdate.com. Формально это легитимный домен Microsoft, который используется для загрузки списков отзыва сертификатов. Однако его появление в дампе требует проверки — иногда такие домены используют для обхода блокировок.
+## 🧭 Цепочка событий
 
-Третий — win-cosmic-mind.monasticservice.org. Этот домен выглядит подозрительно из-за нестандартного имени и, что важнее, использует порт 445.
+```mermaid
+flowchart LR
+    A["👤 Пользователь<br/>внутренний хост"] --> B["🌐 DNS-запрос<br/>trallfasterinf.com"]
+    B --> C["📥 HTTP 80/TCP<br/>137.184.114.20<br/>DigitalOcean"]
+    C --> D["🦠 Заражение хоста<br/>IcedID"]
+    D --> E["🔁 Маскировка трафика<br/>ctldl.windowsupdate.com<br/>209.197.3.8"]
+    D --> F["🚨 SMB 445/TCP наружу<br/>10.9.23.23 →<br/>win-cosmic-mind.monasticservice.org"]
+    F --> G["⚠️ Lateral movement<br/>или бэкдор"]
 
+    style C fill:#c92a2a,color:#fff,stroke:#000
+    style F fill:#e8590c,color:#fff,stroke:#000
+    style G fill:#862e9c,color:#fff,stroke:#000
+```
 
-3.3. Подозрительные соединения
-Я отфильтровал трафик по IP-адресам, связанным с подозрительными доменами, и обнаружил следующее.
+---
 
-IP-адрес 137.184.114.20 на порту 80 принимал соединения от домена trallfasterinf.com. Это фишинговый ресурс, размещённый на хостинге DigitalOcean.
+## 🔎 Индикаторы компрометации
 
-IP-адрес 209.197.3.8 на порту 80 связан с доменом ctldl.windowsupdate.com. Он принадлежит Microsoft, и сам по себе не вызывает подозрений, но высокая частота запросов к нему может указывать на попытку маскировки.
+### Домены
 
-Самое тревожное соединение — это трафик с внутреннего IP 10.9.23.23 на порт 445 к домену win-cosmic-mind.monasticservice.org. Порт 445 используется для протокола SMB, который обычно работает внутри сети. Исходящий SMB-трафик на внешний домен — это нетипичное поведение, которое может указывать на попытку распространения вредоносного ПО (lateral movement) или наличие бэкдора.
+| Домен | Роль | VirusTotal | Вердикт |
+|---|---|:--:|---|
+| `trallfasterinf.com` | Фишинг / доставка | **10 / 92** | 🔴 Вредоносный |
+| `win-cosmic-mind.monasticservice.org` | SMB-аномалия (445/TCP) | 0 / 92 | 🟠 Подозрительный |
+| `ctldl.windowsupdate.com` | Легитимный Microsoft CTL | 0 / 92 | 🟡 Требует проверки |
 
+### IP-адреса
 
-3.4. Аномалии портов
-Порт 80 (HTTP) используется для связи с фишинговым доменом trallfasterinf.com. Хотя порт стандартный, сам характер трафика является вредоносным.
+| IP | Порт | Принадлежность | Вердикт |
+|---|:--:|---|---|
+| `137.184.114.20` | 80/TCP | DigitalOcean (хостинг фишинга) | 🔴 Вредоносный |
+| `209.197.3.8` | 80/TCP | Microsoft | 🟡 Легитимный, но частота запросов подозрительна |
+| `10.9.23.23` | 445/TCP | Внутренний хост (RFC1918) | 🟠 Скомпрометирован |
 
-Порт 445 (SMB) используется в соединении с win-cosmic-mind.monasticservice.org. Это нетипично для SMB, который обычно направлен на внутренние файловые серверы. Такое поведение почти всегда свидетельствует об атаке.
+### Порты
 
+| Порт | Протокол | Почему в списке |
+|:--:|---|---|
+| `80` | HTTP | Связь с фишинговым доменом `trallfasterinf.com` |
+| `445` | SMB | **Исходящий** SMB наружу — почти всегда признак атаки |
 
-4. Результаты проверки в VirusTotal
-Домен trallfasterinf.com получил 10 детектов из 92. Антивирусы Webroot, Seclookup, G-Data, CyRadar, alphaMountain.ai, Sophos, Lionic, Fortinet, BitDefender и ADMINUSLabs определили его как фишинговый или вредоносный.
+📦 Машиночитаемые форматы: [`ioc/iocs.csv`](ioc/iocs.csv) · [`ioc/iocs.json`](ioc/iocs.json) · [`ioc/blocklist.txt`](ioc/blocklist.txt)
 
-Домен ctldl.windowsupdate.com не имеет детектов. Он принадлежит Microsoft, но его появление в дампе может быть попыткой обойти фильтрацию.
+---
 
-Домен win-cosmic-mind.monasticservice.org также не имеет детектов в VirusTotal. Однако отсутствие в базах не делает его безопасным, особенно в сочетании с аномальным портом.
+## 🛡 Рекомендации
 
-IP-адрес 137.184.114.20 принадлежит хостинг-провайдеру DigitalOcean, на котором часто размещают фишинговые страницы. IP-адрес 209.197.3.8 принадлежит Microsoft и является легитимным. IP-адрес 10.9.23.23 относится к частному диапазону и, вероятно, является внутренним хостом.
-5. Выводы
-В дампе выявлен подтверждённый фишинговый домен trallfasterinf.com, связанный с внешним IP 137.184.114.20. Антивирусные движки классифицируют его как угрозу.
+| # | Действие | Приоритет |
+|:--:|---|:--:|
+| 1 | Заблокировать `trallfasterinf.com` и `137.184.114.20` на всех сетевых уровнях | 🔴 Немедленно |
+| 2 | Заблокировать `win-cosmic-mind.monasticservice.org` и исходящий 445/TCP от `10.9.23.23` | 🔴 Немедленно |
+| 3 | Изолировать и проверить хост `10.9.23.23` на наличие ВПО | 🔴 Немедленно |
+| 4 | Настроить постоянный мониторинг исходящего SMB (445/TCP) на внешние адреса | 🟠 Высокий |
+| 5 | Проверить частоту обращений к `ctldl.windowsupdate.com` на предмет маскировки | 🟡 Средний |
 
-Домен ctldl.windowsupdate.com формально является легитимным, но его появление требует проверки — возможно, злоумышленник использует его для обхода блокировок.
+Готовые правила: [`rules/suricata.rules`](rules/suricata.rules) · [`rules/sigma/`](rules/sigma)
 
-Наиболее тревожной находкой является соединение с доменом win-cosmic-mind.monasticservice.org на порт 445 с внутреннего IP 10.9.23.23. Это нетипичный сценарий: SMB-трафик не должен направляться на внешний ресурс с таким доменным именем. Такое поведение может свидетельствовать о попытке распространения вредоносного ПО по сети (например, через эксплуатацию уязвимостей SMB) или о наличии бэкдора.
+---
 
-Отсутствие детектов для двух последних доменов в VirusTotal не исключает их вредоносности, особенно в сочетании с аномальными портами.
-6. Рекомендации
-Заблокировать домен trallfasterinf.com и IP 137.184.114.20 на всех сетевых уровнях.
+## 📂 Структура репозитория
 
-Заблокировать домен win-cosmic-mind.monasticservice.org и любой трафик на порт 445, исходящий от хоста 10.9.23.23 (если он не является легитимным файловым сервером).
+```
+.
+├── README.md                  ← вы здесь: сводка и ключевые выводы
+├── assets/
+│   └── banner.png             обложка проекта
+├── docs/
+│   ├── report.md              полный отчёт по анализу
+│   ├── methodology.md         методология и команды Wireshark/tshark
+│   └── index.html             веб-версия отчёта (GitHub Pages)
+├── ioc/
+│   ├── iocs.csv               индикаторы в CSV
+│   ├── iocs.json              индикаторы в JSON (MISP-совместимая структура)
+│   └── blocklist.txt          плоский список для блокировки
+├── rules/
+│   ├── suricata.rules         сетевые сигнатуры (Suricata/Snort)
+│   └── sigma/                 правила Sigma для SIEM
+├── ci/                        готовые GitHub Actions (валидация IoC + Pages)
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── LICENSE
+```
 
-Настроить мониторинг исходящего SMB-трафика (порт 445) на внешние адреса.
+---
 
-Проверить хост 10.9.23.23 на наличие вредоносного ПО.
-7. Индикаторы компрометации (IoC)
-Домен: trallfasterinf.com (фишинг, 10 детектов)
+## 🚀 Как пользоваться
 
-IP: 137.184.114.20 (хостинг фишинга)
+```bash
+# 1. Блокировка доменов и IP из плоского списка
+cat ioc/blocklist.txt
 
-Домен: win-cosmic-mind.monasticservice.org (SMB-аномалия)
+# 2. Подключение сигнатур Suricata
+sudo cp rules/suricata.rules /etc/suricata/rules/icedid-2022-09-23.rules
+sudo suricata -T -c /etc/suricata/suricata.yaml   # проверка конфигурации
 
-Хост-источник: 10.9.23.23 (порт 445)
+# 3. Быстрая проверка собственного дампа на эти индикаторы
+tshark -r capture.pcap -Y 'dns.qry.name contains "trallfasterinf"'
+tshark -r capture.pcap -Y 'tcp.dstport == 445 && !(ip.dst == 10.0.0.0/8)'
+```
 
-Порт: 445 (SMB, исходящий трафик)
+---
 
+<details>
+<summary><b>🇬🇧 English summary</b></summary>
 
-ИНДИКАТОРЫ КОМПРОМЕТАЦИИ (IoC)
-Инцидент: анализ дампа 2022-09-23-IcedID-infection-with-Cobalt-Strike
-Дата извлечения: 2026-03-26
-Аналитик: DeqUser
+<br>
 
-IP-адреса
-137.184.114.20
-209.197.3.8
-10.9.23.23
+Network traffic analysis of the `2022-09-23-IcedID-infection-with-Cobalt-Strike` capture from malware-traffic-analysis.net.
 
-Доменные имена
-trallfasterinf.com
-ctldl.windowsupdate.com
-win-cosmic-mind.monasticservice.org
+**Key findings**
 
-Другие артефакты
-MAC-адрес (связанный с 10.9.23.23): не определён (частный IP)
-Порты (подозрительная активность):
+- `trallfasterinf.com` (`137.184.114.20`, DigitalOcean, 80/TCP) — phishing/delivery domain, flagged by 10/92 VirusTotal engines.
+- `win-cosmic-mind.monasticservice.org` — contacted over **445/TCP (SMB) from internal host `10.9.23.23`**. Outbound SMB to an external domain is a strong indicator of lateral movement or a backdoor.
+- `ctldl.windowsupdate.com` (`209.197.3.8`) — legitimate Microsoft CTL endpoint, but request frequency should be reviewed as possible blending/masquerading traffic.
 
-80/TCP (связь с trallfasterinf.com)
+**Deliverables** — machine-readable IoCs (CSV/JSON/blocklist), Suricata signatures and Sigma rules, full methodology write-up.
 
-445/TCP (SMB-трафик на внешний домен)
+</details>
 
-Примечание: порт 445 (SMB) является критическим индикатором — исходящий SMB-трафик на внешний адрес нетипичен и почти всегда указывает на атаку (lateral movement, эксплуатация уязвимостей)
+<details>
+<summary><b>⚠️ Дисклеймер и ограничения анализа</b></summary>
+
+<br>
+
+- Репозиторий носит **исключительно образовательный и исследовательский характер**. Он не содержит вредоносных файлов и самого PCAP — только результаты анализа.
+- Точная длительность записи и общее число пакетов/потоков в рамках данного разбора не фиксировались, поэтому выводы о масштабе атаки не делаются.
+- Отсутствие детектов в VirusTotal не является доказательством безопасности индикатора, особенно в сочетании с аномальным использованием портов.
+- Индикаторы актуальны на дату извлечения (2026-03-26) и со временем могут терять релевантность.
+
+</details>
+
+---
+
+<div align="center">
+
+**Аналитик:** DeqUser · **Лицензия:** [MIT](LICENSE) · **Классификация:** TLP:CLEAR
+
+⭐ Если материал оказался полезен — поставьте звезду репозиторию
+
+</div>

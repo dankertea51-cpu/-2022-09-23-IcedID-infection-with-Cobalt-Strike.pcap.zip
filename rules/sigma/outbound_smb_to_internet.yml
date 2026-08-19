@@ -1,0 +1,62 @@
+title: Outbound SMB (445/tcp) to external network
+id: 6f1c2a30-4b7e-4c21-9d55-1a9c0e7b2f03
+status: experimental
+description: >
+  Detects SMB traffic leaving the perimeter. SMB is an internal file-sharing
+  protocol; outbound 445/tcp to the internet is atypical and is a strong
+  indicator of lateral movement, exploitation attempts or a backdoor channel.
+  In the 2022-09-23 IcedID capture this pattern was observed from internal host
+  10.9.23.23 towards win-cosmic-mind.monasticservice.org.
+references:
+  - https://www.malware-traffic-analysis.net/
+author: DeqUser
+date: 2026-03-26
+tags:
+  - attack.lateral_movement
+  - attack.t1021.002
+  - attack.exfiltration
+  - attack.t1048
+logsource:
+  category: network_connection
+detection:
+  smb:
+    DestinationPort: 445
+    Initiated: true
+  internal_destinations:
+    DestinationIp|cidr:
+      - '10.0.0.0/8'
+      - '172.16.0.0/12'
+      - '192.168.0.0/16'
+      - '127.0.0.0/8'
+      - '169.254.0.0/16'
+  condition: smb and not internal_destinations
+fields:
+  - SourceIp
+  - DestinationIp
+  - DestinationHostname
+falsepositives:
+  - Legitimate cloud file shares (e.g. Azure Files) reached over public IPs — allowlist them explicitly.
+  - Site-to-site links where the remote subnet is not part of the internal CIDR list.
+level: high
+---
+title: DNS query for SMB-anomaly domain win-cosmic-mind.monasticservice.org
+id: 6f1c2a30-4b7e-4c21-9d55-1a9c0e7b2f04
+status: experimental
+description: >
+  Detects resolution of the domain contacted over SMB in the analysed capture.
+  The domain had zero VirusTotal detections at the time of analysis, so this
+  rule is intended for hunting and enrichment rather than automatic blocking.
+author: DeqUser
+date: 2026-03-26
+tags:
+  - attack.command_and_control
+  - attack.t1071
+logsource:
+  category: dns_query
+detection:
+  dns_query:
+    QueryName|contains: 'win-cosmic-mind.monasticservice.org'
+  condition: dns_query
+falsepositives:
+  - Unknown. Investigate every hit.
+level: medium
