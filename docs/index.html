@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IcedID + Cobalt Strike — анализ PCAP (2022-09-23)</title>
+<meta name="description" content="Разбор сетевого дампа 2022-09-23-IcedID-infection-with-Cobalt-Strike: индикаторы компрометации, SMB-аномалия, правила детекта.">
+<style>
+  :root{
+    --bg:#070b14; --bg-soft:#0d1424; --card:#111a2e; --line:#1e2c47;
+    --txt:#e6ecf7; --muted:#93a2bd; --cyan:#38d9f0; --pink:#f062a0;
+    --red:#ff5d5d; --orange:#ffa94d; --yellow:#ffd43b; --green:#51cf66;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--cyan);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+
+  header.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);
+    background:radial-gradient(1200px 420px at 50% -120px,rgba(56,217,240,.18),transparent 60%),var(--bg-soft)}
+  .hero-inner{padding:70px 22px 56px;text-align:center}
+  .kicker{display:inline-block;font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--cyan);border:1px solid rgba(56,217,240,.35);border-radius:999px;padding:5px 14px;margin-bottom:22px}
+  h1{margin:0 0 12px;font-size:clamp(30px,5.6vw,54px);line-height:1.1;letter-spacing:-.02em}
+  h1 span{background:linear-gradient(90deg,var(--cyan),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{margin:0 auto;max-width:660px;color:var(--muted);font-size:17px}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:26px}
+  .badge{font-size:12px;padding:5px 11px;border-radius:6px;border:1px solid var(--line);
+    background:rgba(255,255,255,.03);color:var(--muted)}
+  .badge b{color:var(--txt);font-weight:600}
+  .cta{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:30px}
+  .btn{padding:11px 20px;border-radius:9px;font-size:14px;font-weight:600;border:1px solid var(--line);
+    background:var(--card);color:var(--txt);transition:.18s}
+  .btn:hover{transform:translateY(-2px);text-decoration:none;border-color:var(--cyan)}
+  .btn.primary{background:linear-gradient(90deg,#1c9ab5,#8e3d75);border-color:transparent}
+
+  section{padding:56px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:24px;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:0 0 26px;font-size:15px}
+
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:20px}
+  .card h3{margin:0 0 8px;font-size:16px}
+  .card p{margin:0;color:var(--muted);font-size:14px}
+  .card .num{font-size:30px;font-weight:700;letter-spacing:-.02em}
+
+  .chain{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px}
+  .step{flex:1 1 170px;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--cyan);
+    border-radius:10px;padding:14px}
+  .step .n{font-size:11px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+  .step .t{font-weight:600;margin:5px 0 4px;font-size:14px}
+  .step .d{font-size:12.5px;color:var(--muted);word-break:break-word}
+  .step.warn{border-left-color:var(--orange)}
+  .step.crit{border-left-color:var(--red)}
+
+  .tbl{width:100%;border-collapse:collapse;font-size:14px;overflow:hidden;
+    border:1px solid var(--line);border-radius:12px}
+  .tbl th{background:rgba(255,255,255,.035);text-align:left;padding:11px 14px;font-size:12px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .tbl td{padding:11px 14px;border-top:1px solid var(--line);vertical-align:top}
+  .tbl tr:hover td{background:rgba(56,217,240,.045)}
+  .scroll{overflow-x:auto}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .t-mal{background:rgba(255,93,93,.14);color:var(--red);border:1px solid rgba(255,93,93,.3)}
+  .t-sus{background:rgba(255,169,77,.14);color:var(--orange);border:1px solid rgba(255,169,77,.3)}
+  .t-inf{background:rgba(255,212,59,.13);color:var(--yellow);border:1px solid rgba(255,212,59,.28)}
+  .t-ok{background:rgba(81,207,102,.13);color:var(--green);border:1px solid rgba(81,207,102,.28)}
+
+  pre{background:#060a12;border:1px solid var(--line);border-radius:11px;padding:16px;overflow-x:auto;font-size:13px}
+  pre .c{color:#5c6d8c}
+  ol.recs{padding-left:0;list-style:none;counter-reset:r;margin:0}
+  ol.recs li{counter-increment:r;background:var(--card);border:1px solid var(--line);border-radius:11px;
+    padding:14px 16px 14px 54px;position:relative;margin-bottom:10px;font-size:14.5px}
+  ol.recs li::before{content:counter(r);position:absolute;left:16px;top:13px;width:24px;height:24px;
+    border-radius:7px;background:linear-gradient(135deg,#1c9ab5,#8e3d75);color:#fff;font-size:13px;
+    font-weight:700;display:flex;align-items:center;justify-content:center}
+  footer{padding:36px 0 50px;color:var(--muted);font-size:13px;text-align:center}
+  .note{background:rgba(255,169,77,.07);border:1px solid rgba(255,169,77,.28);border-left:3px solid var(--orange);
+    border-radius:9px;padding:14px 16px;font-size:14px;color:#e8d9c6}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <span class="kicker">Threat Intelligence · TLP:CLEAR</span>
+    <h1>Анализ дампа <span>IcedID + Cobalt Strike</span></h1>
+    <p class="lede">Разбор сетевого трафика <span class="mono">2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap</span>:
+      извлечение индикаторов компрометации, обнаружение SMB-аномалии и подготовка правил детекта.</p>
+    <div class="badges">
+      <span class="badge">Аналитик: <b>DeqUser</b></span>
+      <span class="badge">Извлечено: <b>2026-03-26</b></span>
+      <span class="badge">Источник: <b>malware-traffic-analysis.net</b></span>
+      <span class="badge">Риск: <b style="color:var(--red)">высокий</b></span>
+    </div>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/dankertea51-cpu/-2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip/blob/main/docs/report.md">Полный отчёт</a>
+      <a class="btn" href="https://github.com/dankertea51-cpu/-2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip/blob/main/docs/methodology.md">Методология</a>
+      <a class="btn" href="https://github.com/dankertea51-cpu/-2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section>
+  <div class="wrap">
+    <h2>Ключевые цифры</h2>
+    <p class="sub">Что дал разбор дампа</p>
+    <div class="grid g3">
+      <div class="card"><div class="num" style="color:var(--red)">10/92</div>
+        <h3>детектов VirusTotal</h3><p>у домена <span class="mono">trallfasterinf.com</span> — подтверждённый фишинг</p></div>
+      <div class="card"><div class="num" style="color:var(--orange)">445/TCP</div>
+        <h3>SMB наружу</h3><p>исходящий SMB с внутреннего хоста на внешний домен — критический признак</p></div>
+      <div class="card"><div class="num" style="color:var(--cyan)">6</div>
+        <h3>индикаторов</h3><p>3 домена и 3 IP-адреса, готовых к загрузке в SIEM и на периметр</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Цепочка событий</h2>
+    <p class="sub">Реконструкция по сетевым артефактам</p>
+    <div class="chain">
+      <div class="step"><div class="n">Шаг 1</div><div class="t">DNS-запрос</div>
+        <div class="d mono">trallfasterinf.com</div></div>
+      <div class="step crit"><div class="n">Шаг 2</div><div class="t">HTTP 80/TCP</div>
+        <div class="d mono">137.184.114.20 · DigitalOcean</div></div>
+      <div class="step crit"><div class="n">Шаг 3</div><div class="t">Заражение хоста</div>
+        <div class="d">Доставка полезной нагрузки</div></div>
+      <div class="step warn"><div class="n">Шаг 4</div><div class="t">Маскировка</div>
+        <div class="d mono">ctldl.windowsupdate.com</div></div>
+      <div class="step crit"><div class="n">Шаг 5</div><div class="t">SMB наружу</div>
+        <div class="d mono">10.9.23.23 → :445</div></div>
+      <div class="step crit"><div class="n">Итог</div><div class="t">Lateral movement</div>
+        <div class="d">или наличие бэкдора</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Индикаторы компрометации</h2>
+    <p class="sub">Машиночитаемые версии: <a href="https://github.com/dankertea51-cpu/-2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip/blob/main/ioc/iocs.csv">CSV</a> ·
+      <a href="https://github.com/dankertea51-cpu/-2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip/blob/main/ioc/iocs.json">JSON</a> ·
+      <a href="https://github.com/dankertea51-cpu/-2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap.zip/blob/main/ioc/blocklist.txt">blocklist</a></p>
+
+    <div class="scroll" style="margin-bottom:22px">
+      <table class="tbl">
+        <thead><tr><th>Домен</th><th>Роль</th><th>VirusTotal</th><th>Вердикт</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">trallfasterinf.com</td><td>фишинг / доставка</td><td><b>10 / 92</b></td><td><span class="tag t-mal">вредоносный</span></td></tr>
+          <tr><td class="mono">win-cosmic-mind.monasticservice.org</td><td>SMB-аномалия (445/TCP)</td><td>0 / 92</td><td><span class="tag t-sus">подозрительный</span></td></tr>
+          <tr><td class="mono">ctldl.windowsupdate.com</td><td>легитимный Microsoft CTL</td><td>0 / 92</td><td><span class="tag t-inf">проверить</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th>IP-адрес</th><th>Порт</th><th>Принадлежность</th><th>Вердикт</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">137.184.114.20</td><td class="mono">80/TCP</td><td>DigitalOcean</td><td><span class="tag t-mal">вредоносный</span></td></tr>
+          <tr><td class="mono">209.197.3.8</td><td class="mono">80/TCP</td><td>Microsoft</td><td><span class="tag t-ok">легитимный</span></td></tr>
+          <tr><td class="mono">10.9.23.23</td><td class="mono">445/TCP</td><td>внутренний хост (RFC1918)</td><td><span class="tag t-sus">скомпрометирован</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Почему SMB наружу — это критично</h2>
+    <p class="sub">Главная находка разбора</p>
+    <div class="note">
+      Порт 445 обслуживает протокол SMB, который штатно работает только внутри периметра.
+      Исходящее SMB-соединение на внешний домен нетипично и почти всегда указывает
+      на попытку горизонтального перемещения, эксплуатацию уязвимостей SMB либо на канал бэкдора.
+      Отсутствие детектов в VirusTotal у домена не снимает подозрений: свежие C2-домены попадают в базы с задержкой.
+    </div>
+    <pre style="margin-top:18px"><span class="c"># Быстрая проверка собственного дампа</span>
+tshark -r capture.pcap -Y 'tcp.dstport == 445 &amp;&amp; !(ip.dst == 10.0.0.0/8) \
+  &amp;&amp; !(ip.dst == 192.168.0.0/16) &amp;&amp; !(ip.dst == 172.16.0.0/12)' \
+  -T fields -e ip.src -e ip.dst</pre>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Рекомендации</h2>
+    <p class="sub">Приоритизированный план реагирования</p>
+    <ol class="recs">
+      <li>Заблокировать домен <span class="mono">trallfasterinf.com</span> и IP <span class="mono">137.184.114.20</span> на всех сетевых уровнях.</li>
+      <li>Заблокировать <span class="mono">win-cosmic-mind.monasticservice.org</span> и исходящий 445/TCP от хоста <span class="mono">10.9.23.23</span>.</li>
+      <li>Изолировать и проверить хост <span class="mono">10.9.23.23</span> на наличие вредоносного ПО.</li>
+      <li>Настроить постоянный мониторинг исходящего SMB-трафика на внешние адреса.</li>
+      <li>Проверить частоту обращений к <span class="mono">ctldl.windowsupdate.com</span> на предмет маскировки трафика.</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    Материал носит образовательный характер и не содержит вредоносных файлов.<br>
+    Аналитик: DeqUser · Лицензия MIT · TLP:CLEAR · Индикаторы актуальны на 2026-03-26
+  </div>
+</footer>
+
+</body>
+</html>

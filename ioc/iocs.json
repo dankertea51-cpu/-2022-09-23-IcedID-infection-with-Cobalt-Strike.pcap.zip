@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "incident": {
+    "name": "2022-09-23-IcedID-infection-with-Cobalt-Strike",
+    "source": "malware-traffic-analysis.net",
+    "artifact": "2022-09-23-IcedID-infection-with-Cobalt-Strike.pcap",
+    "malware_families": ["IcedID", "Cobalt Strike"],
+    "analyst": "DeqUser",
+    "extracted_at": "2026-03-26",
+    "tlp": "CLEAR",
+    "risk": "high"
+  },
+  "indicators": [
+    {
+      "type": "domain",
+      "value": "trallfasterinf.com",
+      "role": "delivery/phishing",
+      "verdict": "malicious",
+      "confidence": "high",
+      "virustotal": { "detections": 10, "engines": 92 },
+      "detected_by": [
+        "Webroot", "Seclookup", "G-Data", "CyRadar", "alphaMountain.ai",
+        "Sophos", "Lionic", "Fortinet", "BitDefender", "ADMINUSLabs"
+      ],
+      "related": ["137.184.114.20"],
+      "ports": [{ "number": 80, "protocol": "tcp" }],
+      "notes": "Phishing domain hosted on DigitalOcean infrastructure."
+    },
+    {
+      "type": "domain",
+      "value": "win-cosmic-mind.monasticservice.org",
+      "role": "smb-anomaly",
+      "verdict": "suspicious",
+      "confidence": "medium",
+      "virustotal": { "detections": 0, "engines": 92 },
+      "related": ["10.9.23.23"],
+      "ports": [{ "number": 445, "protocol": "tcp" }],
+      "notes": "Contacted over SMB from an internal host. Absence of VT detections does not imply the domain is safe."
+    },
+    {
+      "type": "domain",
+      "value": "ctldl.windowsupdate.com",
+      "role": "legitimate/possible-masquerade",
+      "verdict": "informational",
+      "confidence": "low",
+      "virustotal": { "detections": 0, "engines": 92 },
+      "related": ["209.197.3.8"],
+      "ports": [{ "number": 80, "protocol": "tcp" }],
+      "notes": "Legitimate Microsoft CTL endpoint. High request frequency may indicate traffic blending."
+    },
+    {
+      "type": "ipv4-addr",
+      "value": "137.184.114.20",
+      "role": "phishing-host",
+      "verdict": "malicious",
+      "confidence": "high",
+      "asn_owner": "DigitalOcean",
+      "ports": [{ "number": 80, "protocol": "tcp" }]
+    },
+    {
+      "type": "ipv4-addr",
+      "value": "209.197.3.8",
+      "role": "cdn/legitimate",
+      "verdict": "informational",
+      "confidence": "high",
+      "asn_owner": "Microsoft",
+      "ports": [{ "number": 80, "protocol": "tcp" }]
+    },
+    {
+      "type": "ipv4-addr",
+      "value": "10.9.23.23",
+      "role": "compromised-internal-host",
+      "verdict": "suspicious",
+      "confidence": "medium",
+      "asn_owner": "RFC1918 private range",
+      "ports": [{ "number": 445, "protocol": "tcp" }],
+      "notes": "Source of outbound SMB traffic. Associated MAC address not determined."
+    },
+    {
+      "type": "network-traffic",
+      "value": "445/tcp outbound",
+      "role": "lateral-movement",
+      "verdict": "malicious",
+      "confidence": "high",
+      "notes": "Outbound SMB to an external address is atypical and almost always indicates an attack."
+    }
+  ],
+  "recommendations": [
+    "Block trallfasterinf.com and 137.184.114.20 at every network layer.",
+    "Block win-cosmic-mind.monasticservice.org and outbound 445/tcp from 10.9.23.23.",
+    "Monitor outbound SMB (445/tcp) to external addresses continuously.",
+    "Investigate host 10.9.23.23 for malware."
+  ]
+}
